@@ -1,0 +1,28 @@
+name: Spring 21 - Generate website files
+on:
+    push:
+        branches:
+            - Spring21
+    workflow_dispatch:
+
+jobs:
+    build-and-deploy:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Spring 21 source
+              uses: actions/checkout@v2
+
+            - name: Install Julia
+              uses: julia-actions/setup-julia@v1
+              with:
+                  version: 1.6.0-rc1
+
+            - name: Run tools/generate_book.jl
+              run: julia --project=pluto-deployment-environment tools/generate_book.jl
+
+            - name: Build and Deploy
+              uses: JamesIves/github-pages-deploy-action@releases/v3
+              with:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  BRANCH: Spring21-franklin-input
+                  FOLDER: .

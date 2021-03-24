@@ -1,4 +1,6 @@
-using Pluto
+# run me from the root of the repository directory, using:
+# > julia --project=pluto-deployment-environment tools/generate_book.jl
+
 
 # Goals for this script:
 # 1. Add Headers to each of the notebook with the correct styling and youtube video
@@ -7,6 +9,16 @@ using Pluto
 # Bonuses:
 # - Hide markdown and html cell
 # - Remove empty cells
+
+
+using Pluto
+
+# If we're running inside a github action, redirect Julia logs to the github UI
+using Logging: global_logger
+using GitHubActions: GitHubActionsLogger
+get(ENV, "GITHUB_ACTIONS", "false") == "true" && global_logger(GitHubActionsLogger())
+
+
 
 struct Section
     chapter::Int
@@ -56,17 +68,17 @@ book_model = [
     Section(2, 3, "Modeling with Stochastic Simulation", "notebooks/week6/simulating_component_failure.jl", "")
 ]
 
-function name_from_path(path::String)
-    return splitdir(splitext(path)[1])[end]
-end
+without_dotjl(path) = splitext(path)[1]
 
-# This assumes that all path's are from repo root and that we are writing to website/
+"""
+Generate the single-line .md file that embeds the static preview of the notebook. Franklin needs the .md file to exist to create a page.
+
+This assumes that all path's are relative to the repo root and that we are writing to website/
+"""
 function write_md_page(path::String)
-    file_name =  name_from_path(path)
+    file_name = basename(without_dotjl(path))
     outpath = "website/$file_name.md"
-    file_stream = open(outpath, "w")
-    write(file_stream, "{{ plutonotebookpage  ../$path }}")
-    close(file_stream)
+    write(outpath, "{{ plutonotebookpage  ../$path }}")
 end
 
 function html_header(section::Section)
@@ -125,7 +137,7 @@ end
 
 function process_book_item(section::Section)
 
-    notebook  = Pluto.load_notebook_nobackup(open(section.notebook_path), section.notebook_path)
+    notebook  = Pluto.load_notebook_nobackup(section.notebook_path)
     ordered_cells = notebook.cells
 
     # First, add the header to each cell 
@@ -134,7 +146,7 @@ function process_book_item(section::Section)
 
     if startswith(first_cell.code, "html")
         # We can just overwrite this cell
-        ordered_cells[1] = Pluto.Cell(first_cell.cell_id, new_cell_code)
+        ordered_cells[1].code = new_cell_code
     else
         # We get to add a new cell
         insert!(ordered_cells, 1, Pluto.Cell(new_cell_code))
@@ -154,13 +166,17 @@ function process_book_item(section::Section)
 end
 
 function process_book_item(ch::Chapter)
-# There are no notebooks so skip
+    # This is not a notebook so we don't need to do anything
 end
 
+
+###
+# SIDEBAR
+
 function sidebar_line(section::Section)
-    file_name =  name_from_path(section.notebook_path)
+    notebook_name = basename(without_dotjl(section.notebook_path))
     return """
-      <a class="sidebar-nav-item {{ispage /$file_name/}}active{{end}}" href="/$file_name/"><b>$(section.chapter).$(section.section)</b> - <em>$(section.name)</em></a>
+      <a class="sidebar-nav-item {{ispage /$notebook_name/}}active{{end}}" href="/$notebook_name/"><b>$(section.chapter).$(section.section)</b> - <em>$(section.name)</em></a>
     """
 end
 
@@ -171,9 +187,8 @@ function sidebar_line(ch::Chapter)
 end
 
 
-function sidebar_code()
-
-    top_matter = """
+function sidebar_code(book_model)
+    return """
 <div class="sidebar">
   <div class="container sidebar-sticky">
     <div class="sidebar-about">
@@ -198,14 +213,7 @@ function sidebar_code()
       <a class="sidebar-nav-item {{ispage /cheatsheets/}}active{{end}}" href="/cheatsheets/">Cheatsheets</a>
       <a class="sidebar-nav-item {{ispage /semesters/}}active{{end}}" href="/semesters/">Previous semesters</a>
       <br>
-      """
-      # Add this stuff
-    middle_matter = ""
-    for item ∈ book_model
-        middle_matter *= sidebar_line(item)
-    end
-
-    bottom_matter = """
+      $(join(sidebar_line.(book_model)))
       <div class="course-section">Module 3</div>
       <em>Starting in week 7</em>
       <div class="course-section">Module 4</div>
@@ -216,16 +224,18 @@ function sidebar_code()
     </div>
   </div>
 <div class="content container">"""
-    return top_matter * middle_matter * bottom_matter
 end
 
-function write_sidebar() 
-    file_stream = open("website/_layout/sidebar.html", "w")
-    write(file_stream, sidebar_code())
-    close(file_stream)
+function write_sidebar(book_model)
+    write("website/_layout/sidebar.html", sidebar_code(book_model))
 end
+
+
+
+###
+# RUN OUR FUNCTIONS
 
 for section ∈ book_model
     process_book_item(section)
 end
-write_sidebar()
+write_sidebar(book_model)
