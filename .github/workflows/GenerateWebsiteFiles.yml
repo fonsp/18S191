@@ -17,6 +17,9 @@ jobs:
               with:
                   version: 1.6.0-rc1
 
+            - name: Pkg.instantiate
+              run: julia --project=pluto-deployment-environment -e 'import Pkg; Pkg.instantiate()'
+
             - name: Run tools/generate_book.jl
               run: julia --project=pluto-deployment-environment tools/generate_book.jl
 

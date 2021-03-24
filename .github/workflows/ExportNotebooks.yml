@@ -2,7 +2,7 @@ name: Spring 21 - Export Pluto notebooks & Deploy
 on:
     push:
         branches:
-            - Spring21
+            - Spring21-franklin-input
     workflow_dispatch:
 
 jobs:
